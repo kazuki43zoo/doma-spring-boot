@@ -15,29 +15,31 @@
  */
 package org.seasar.doma.boot;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
+
+import java.util.List;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.SpringApplicationConfiguration;
-import org.springframework.boot.test.TestRestTemplate;
 import org.springframework.boot.test.WebIntegrationTest;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
-
-import java.util.List;
-
-import static org.hamcrest.CoreMatchers.is;
-import static org.junit.Assert.assertThat;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 @SpringApplicationConfiguration(classes = DomaBootSampleSimpleApplication.class)
 @WebIntegrationTest(randomPort = true)
 public class DomaBootSampleSimpleApplicationTest {
-	RestTemplate restTemplate = new TestRestTemplate();
+	RestTemplate restTemplate = new RestTemplate();
 	ParameterizedTypeReference<List<Message>> typedReference = new ParameterizedTypeReference<List<Message>>() {
 	};
 	@Value("${local.server.port}")
@@ -77,6 +79,24 @@ public class DomaBootSampleSimpleApplicationTest {
 			assertThat(messages.size(), is(1));
 			assertThat(messages.get(0).id, is(message2.id));
 			assertThat(messages.get(0).text, is(message2.text));
+		}
+	}
+
+	@Test
+	public void testViolateUniqueConstraint() {
+		restTemplate.getForObject(UriComponentsBuilder.fromUriString("http://localhost")
+				.port(port).queryParam("id", "100").queryParam("text", "hello").build()
+				.toUri(), Message.class);
+		try {
+			restTemplate.getForObject(UriComponentsBuilder
+					.fromUriString("http://localhost").port(port).queryParam("id", "100")
+					.queryParam("text", "hello").build().toUri(), String.class);
+			fail();
+		}
+		catch (HttpClientErrorException e) {
+			assertThat(e.getStatusCode(), is(HttpStatus.CONFLICT));
+			// Subclass of java.sql.SQLException
+			assertThat(e.getResponseBodyAsString(), is("org.h2.jdbc.JdbcSQLException"));
 		}
 	}
 

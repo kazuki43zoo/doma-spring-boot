@@ -15,20 +15,26 @@
  */
 package org.seasar.doma.boot;
 
+import java.sql.SQLException;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import org.seasar.doma.jdbc.UniqueConstraintException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
 
 @SpringBootApplication
 @RestController
 public class DomaBootSampleSimpleApplication {
+
+	private final AtomicInteger idGen = new AtomicInteger(0);
 
 	@Autowired
 	MessageDao messageDao;
@@ -39,11 +45,18 @@ public class DomaBootSampleSimpleApplication {
 	}
 
 	@RequestMapping(value = "/", params = "text")
-	Message add(@RequestParam String text) {
+	Message add(@RequestParam Optional<Integer> id, @RequestParam String text) {
 		Message message = new Message();
+		message.id = id.orElse(idGen.incrementAndGet());
 		message.text = text;
 		messageDao.insert(message);
 		return message;
+	}
+
+	@ExceptionHandler
+	@ResponseStatus(HttpStatus.CONFLICT)
+	String handle(DuplicateKeyException e) {
+		return e.getCause().getClass().getName();
 	}
 
 	public static void main(String[] args) {
